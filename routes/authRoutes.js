@@ -28,7 +28,7 @@ dotenv.config();
 const router = express.Router();
 
 // ====== OAuth Success Handler (Web) ======
-function handleOAuthSuccess(req, res) {
+async function handleOAuthSuccess(req, res, next) {
   console.log("🌟 OAuth Success handler triggered");
 
   // Check if req.user is populated by Passport
@@ -46,22 +46,22 @@ function handleOAuthSuccess(req, res) {
       </script>
     `);
   }
-  
+
   // Start the try-catch block for token generation and sending the response
   try {
     console.log("✅ User object from Passport:", req.user);
 
     // Convert the user object to a plain object. This handles both Mongoose documents and plain objects.
     const userObj = req.user.toObject ? req.user.toObject() : { ...req.user };
-    
+
     console.log("✅ Converted user object:", userObj);
-    
+
     // Clean up sensitive data before sending to the frontend
     delete userObj.password;
     delete userObj.__v;
-    
+
     console.log("✅ Cleaned user object for token payload:", userObj);
-    
+
     // Validate required environment variables for JWT signing
     if (!process.env.ACCESS_TOKEN_SECRET) {
       console.error("❌ Missing required environment variable: ACCESS_TOKEN_SECRET");
@@ -114,7 +114,7 @@ function handleOAuthSuccess(req, res) {
     `);
   } catch (err) {
     console.error("❌ OAuth Token/Response Generation Error:", err);
-    
+
     // Sanitize the error message to avoid XSS and ensure it's a valid string for JSON.stringify
     const errorMessage = JSON.stringify(err.message || "An unknown error occurred during token generation.");
     const FRONTEND_URL = process.env.FRONTEND_URL || "https://alrascars.com";
@@ -185,6 +185,7 @@ router.get(
   "/google/callback",
   (req, res, next) => {
     console.log("🔵 Google OAuth callback triggered");
+    console.log("🔵 Query params:", req.query);
     next();
   },
   // And also use 'google-web' here
@@ -192,7 +193,10 @@ router.get(
     failureRedirect: `${process.env.FRONTEND_URL}/login-failed`,
     session: false,
   }),
-  handleOAuthSuccess
+  (req, res, next) => {
+    console.log("✅ Passport authentication successful, calling handleOAuthSuccess");
+    handleOAuthSuccess(req, res, next).catch(next);
+  }
 );
 
 // ====== Facebook OAuth ======

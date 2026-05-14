@@ -54,11 +54,20 @@ if (
     },
     async (accessToken, refreshToken, profile, done) => {
       console.log(' Web Google OAuth Profile:', profile.id);
-      await handleGoogleAuth(profile, done);
+      try {
+        await handleGoogleAuth(profile, done);
+      } catch (error) {
+        console.error('❌ Google Web Strategy Error:', error);
+        return done(error, null);
+      }
     }
   ));
+  console.log('✅ Google Web strategy initialized with callback URL:', process.env.GOOGLE_CALLBACK_URL);
 } else {
-  console.warn(' Google Web strategy not initialized: missing GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL');
+  console.warn('⚠️ Google Web strategy not initialized: missing GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL');
+  console.warn('GOOGLE_CLIENT_ID:', !!process.env.GOOGLE_CLIENT_ID);
+  console.warn('GOOGLE_CLIENT_SECRET:', !!process.env.GOOGLE_CLIENT_SECRET);
+  console.warn('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL);
 }
 
 // Unified Mobile Strategy for Android and iOS
@@ -218,10 +227,21 @@ if (
 // =======================
 async function handleGoogleAuth(profile, done, fail) {
   try {
+    console.log('🔍 handleGoogleAuth called with profile:', {
+      id: profile.id,
+      email: profile.emails?.[0]?.value,
+      name: profile.displayName
+    });
+
     const email = profile.emails?.[0]?.value;
     if (!email) throw new Error('No email provided by Google');
 
     const normalizedEmail = email.toLowerCase();
+
+    console.log('🔍 Searching for user with google_id or email:', {
+      google_id: profile.id,
+      email: normalizedEmail
+    });
 
     const [rows] = await pool.query(
       'SELECT * FROM profiles WHERE google_id = ? OR email = ? LIMIT 1',
@@ -231,6 +251,7 @@ async function handleGoogleAuth(profile, done, fail) {
     let user = rows[0] || null;
 
     if (!user) {
+      console.log('👤 Creating new Google user');
       // Create new profile
       const firstName = profile.name?.givenName || 'Google';
       const lastName = profile.name?.familyName || 'User';
@@ -254,18 +275,19 @@ async function handleGoogleAuth(profile, done, fail) {
         [normalizedEmail]
       );
       user = createdRows[0];
-      console.log(' Created new Google user:', user.email);
+      console.log('✅ Created new Google user:', user.email);
     } else if (!user.google_id) {
+      console.log('🔗 Linking existing user to Google ID');
       // Link existing profile
       await pool.query(
         'UPDATE profiles SET google_id = ? WHERE id = ?',
         [profile.id, user.id]
       );
       user.google_id = profile.id;
-      console.log(' Linked existing user to Google ID');
+      console.log('✅ Linked existing user to Google ID');
     }
 
-    console.log(' Google auth successful:', user.email);
+    console.log('✅ Google auth successful:', user.email);
     const resultUser = {
       id: user.id,
       userId: user.id,
@@ -278,7 +300,8 @@ async function handleGoogleAuth(profile, done, fail) {
 
     return done(null, resultUser);
   } catch (err) {
-    console.error(' Google auth failed:', err);
+    console.error('❌ Google auth failed:', err);
+    console.error('❌ Error stack:', err.stack);
     if (typeof fail === 'function') {
       return fail({ message: err.message || 'Google auth failed' }, 401);
     }

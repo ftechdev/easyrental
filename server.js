@@ -43,6 +43,10 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: 'lax',
+    }
   })
 );
 app.use(passport.initialize());
@@ -60,6 +64,8 @@ const allowedOrigins = [
   "https://amirhost.in/easyrental/", // new production frontend with trailing slash
   "https://easyrental-theta.vercel.app", // Vercel frontend
   "https://easyrental-theta.vercel.app/", // Vercel frontend with trailing slash
+  "https://blue-jellyfish-713792.hostingersite.com", // OAuth callback domain
+  "https://blue-jellyfish-713792.hostingersite.com/", // OAuth callback domain with trailing slash
 ];
 
 app.use(
@@ -136,11 +142,20 @@ app.use((err, req, res, next) => {
     });
   }
 
-  console.error(err);
+  console.error("❌ Error Details:", {
+    message: err?.message,
+    stack: err?.stack,
+    name: err?.name,
+    statusCode,
+    path: req?.path,
+    method: req?.method,
+  });
+  
   res.status(statusCode).json({
     success: false,
     code: statusCode,
     message: isProd ? "Something broke!" : err?.message || "Something broke!",
+    ...(isProd ? {} : { details: err?.stack }),
   });
 });
 
