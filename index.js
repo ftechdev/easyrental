@@ -17,6 +17,10 @@ app.use(cors());
 app.use(express.json());
 
 // Multer for temporary storage
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 const upload = multer({ dest: 'uploads/' });
 
 // FTP Upload Helper
@@ -51,9 +55,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     fs.unlinkSync(req.file.path);
 
     // Return the URL to access the file
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const imageUrl = `${protocol}://${host}/uploads/${remoteName}`;
+    const imageUrl = `${process.env.FTP_BASE_URL}${remoteName}`;
     res.json({ imageUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
