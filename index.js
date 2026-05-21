@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -5,8 +6,11 @@ const ftp = require('basic-ftp');
 const path = require('path');
 const fs = require('fs');
 const pool = require('./db');
-require('./ftp'); // Start FTP server
-require('dotenv').config();
+
+// Only start local FTP server if host is localhost/127.0.0.1
+if (process.env.FTP_HOST === '127.0.0.1' || process.env.FTP_HOST === 'localhost') {
+  require('./ftp');
+}
 
 const app = express();
 app.use(cors());
