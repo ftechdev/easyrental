@@ -68,8 +68,24 @@ app.get('/', (req, res) => {
 // Cars API
 app.get('/api/cars', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM cars ORDER BY created_at DESC');
-    res.json(rows);
+    const [rows] = await pool.query(`
+      SELECT 
+        id, name, brand, model, year, 
+        category_name as category, 
+        daily_rate as price_per_day, 
+        main_image as image_url, 
+        seats, transmission, fuel_type, 
+        is_available as available, 
+        features, created_at 
+      FROM cars 
+      ORDER BY created_at DESC
+    `);
+    // Ensure boolean availability
+    const cars = rows.map(car => ({
+      ...car,
+      available: car.available === 1 || car.available === true
+    }));
+    res.json(cars);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -77,12 +93,62 @@ app.get('/api/cars', async (req, res) => {
 
 app.post('/api/cars', async (req, res) => {
   const { name, brand, model, year, category, price_per_day, image_url, seats, transmission, fuel_type, features } = req.body;
+  const id = require('crypto').randomUUID();
   try {
-    const [result] = await pool.query(
-      'INSERT INTO cars (name, brand, model, year, category, price_per_day, image_url, seats, transmission, fuel_type, features) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, brand, model, year, category, price_per_day, image_url, seats, transmission, fuel_type, JSON.stringify(features)]
+    await pool.query(
+      'INSERT INTO cars (id, name, brand, model, year, category_name, daily_rate, main_image, seats, transmission, fuel_type, features, is_available) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, name, brand, model, year, category, price_per_day, image_url, seats, transmission, fuel_type, JSON.stringify(features), 1]
     );
-    res.status(201).json({ id: result.insertId, ...req.body });
+    res.status(201).json({ id, ...req.body, available: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/cars/:id', async (req, res) => {
+  const { id } = req.params;
+  const updates = { ...req.body };
+  
+  // Map frontend field names to database column names
+  if (updates.category) { updates.category_name = updates.category; delete updates.category; }
+  if (updates.price_per_day) { updates.daily_rate = updates.price_per_day; delete updates.price_per_day; }
+  if (updates.image_url) { updates.main_image = updates.image_url; delete updates.image_url; }
+  if (updates.available !== undefined) { updates.is_available = updates.available ? 1 : 0; delete updates.available; }
+
+  // Remove id and created_at from updates to avoid SQL errors
+  delete updates.id;
+  delete updates.created_at;
+  delete updates.car_name; // From joins
+
+  const fields = Object.keys(updates);
+  const values = Object.values(updates);
+  
+  if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+  // Handle features JSON stringification
+  if (updates.features !== undefined) {
+    const featuresIndex = fields.indexOf('features');
+    values[featuresIndex] = Array.isArray(updates.features) ? JSON.stringify(updates.features) : updates.features;
+  }
+
+  const query = `UPDATE cars SET ${fields.map(f => `${f} = ?`).join(', ')} WHERE id = ?`;
+  try {
+    const [result] = await pool.query(query, [...values, id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Car not found' });
+    }
+    res.json({ message: 'Car updated successfully' });
+  } catch (err) {
+    console.error('Update car error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/cars/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM cars WHERE id = ?', [id]);
+    res.json({ message: 'Car deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -94,10 +160,21 @@ app.get('/api/bookings', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT b.*, c.name as car_name 
       FROM bookings b 
-      JOIN cars c ON b.car_id = c.id 
+      LEFT JOIN cars c ON b.car_id = c.id 
       ORDER BY b.created_at DESC
     `);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  try {
+    await pool.query('UPDATE bookings SET status = ? WHERE id = ?', [status, id]);
+    res.json({ message: 'Booking updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -111,6 +188,53 @@ app.post('/api/bookings', async (req, res) => {
       [car_id, customer_name, customer_email, customer_phone, pickup_date, return_date, pickup_location, dropoff_location, total_price, delivery_charge, pickup_charge]
     );
     res.status(201).json({ id: result.insertId, ...req.body });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Locations API
+app.get('/api/locations', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM locations ORDER BY name ASC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/locations', async (req, res) => {
+  const { name, delivery_charge, pickup_charge } = req.body;
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO locations (name, delivery_charge, pickup_charge) VALUES (?, ?, ?)',
+      [name, delivery_charge, pickup_charge]
+    );
+    res.status(201).json({ id: result.insertId, ...req.body });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/locations/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, delivery_charge, pickup_charge } = req.body;
+  try {
+    await pool.query(
+      'UPDATE locations SET name = ?, delivery_charge = ?, pickup_charge = ? WHERE id = ?',
+      [name, delivery_charge, pickup_charge, id]
+    );
+    res.json({ message: 'Location updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/locations/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM locations WHERE id = ?', [id]);
+    res.json({ message: 'Location deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
