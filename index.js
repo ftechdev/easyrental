@@ -51,7 +51,9 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     fs.unlinkSync(req.file.path);
 
     // Return the URL to access the file
-    const imageUrl = `http://localhost:${process.env.PORT}/uploads/${remoteName}`;
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const imageUrl = `${protocol}://${host}/uploads/${remoteName}`;
     res.json({ imageUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
