@@ -74,7 +74,9 @@ app.get('/api/cars', async (req, res) => {
       SELECT 
         id, name, brand, model, year, 
         category_name as category, 
-        daily_rate as price_per_day, 
+        daily_rate as price_per_day,
+        weekly_rate as price_per_week,
+        monthly_rate as price_per_month,
         main_image as image_url, 
         seats, transmission, fuel_type, 
         is_available as available, 
@@ -94,14 +96,30 @@ app.get('/api/cars', async (req, res) => {
 });
 
 app.post('/api/cars', async (req, res) => {
-  const { name, brand, model, year, category, price_per_day, image_url, seats, transmission, fuel_type, features } = req.body;
+  const {
+    name, brand, model, year, category, price_per_day, price_per_week, price_per_month,
+    image_url, seats, transmission, fuel_type, features
+  } = req.body;
   const id = require('crypto').randomUUID();
+  const weeklyRate = price_per_week ?? (price_per_day ? Math.round(price_per_day * 5.5 * 100) / 100 : null);
+  const monthlyRate = price_per_month ?? (price_per_day ? Math.round(price_per_day * 22 * 100) / 100 : null);
   try {
     await pool.query(
-      'INSERT INTO cars (id, name, brand, model, year, category_name, daily_rate, main_image, seats, transmission, fuel_type, features, is_available) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, name, brand, model, year, category, price_per_day, image_url, seats, transmission, fuel_type, JSON.stringify(features), 1]
+      `INSERT INTO cars (
+        id, name, brand, model, year, category_name, daily_rate, weekly_rate, monthly_rate,
+        main_image, seats, transmission, fuel_type, features, is_available
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, name, brand, model, year, category, price_per_day, weeklyRate, monthlyRate,
+        image_url, seats, transmission, fuel_type, JSON.stringify(features), 1
+      ]
     );
-    res.status(201).json({ id, ...req.body, available: true });
+    res.status(201).json({
+      id, ...req.body,
+      price_per_week: weeklyRate,
+      price_per_month: monthlyRate,
+      available: true
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -113,7 +131,9 @@ app.patch('/api/cars/:id', async (req, res) => {
   
   // Map frontend field names to database column names
   if (updates.category) { updates.category_name = updates.category; delete updates.category; }
-  if (updates.price_per_day) { updates.daily_rate = updates.price_per_day; delete updates.price_per_day; }
+  if (updates.price_per_day !== undefined) { updates.daily_rate = updates.price_per_day; delete updates.price_per_day; }
+  if (updates.price_per_week !== undefined) { updates.weekly_rate = updates.price_per_week; delete updates.price_per_week; }
+  if (updates.price_per_month !== undefined) { updates.monthly_rate = updates.price_per_month; delete updates.price_per_month; }
   if (updates.image_url) { updates.main_image = updates.image_url; delete updates.image_url; }
   if (updates.available !== undefined) { updates.is_available = updates.available ? 1 : 0; delete updates.available; }
 
