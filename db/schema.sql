@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   delivery_charge DECIMAL(10, 2) DEFAULT 0.00,
   pickup_charge DECIMAL(10, 2) DEFAULT 0.00,
   status ENUM('pending', 'confirmed', 'cancelled', 'completed') DEFAULT 'pending',
+  passport_front TEXT NULL,
+  passport_back TEXT NULL,
+  driving_licence TEXT NULL,
   notes TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE

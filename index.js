@@ -203,11 +203,26 @@ app.patch('/api/bookings/:id', async (req, res) => {
 });
 
 app.post('/api/bookings', async (req, res) => {
-  const { car_id, customer_name, customer_email, customer_phone, pickup_date, return_date, pickup_location, dropoff_location, total_price, delivery_charge, pickup_charge } = req.body;
+  const { 
+    car_id, customer_name, customer_email, customer_phone, 
+    pickup_date, return_date, pickup_location, dropoff_location, 
+    total_price, delivery_charge, pickup_charge,
+    passport_front, passport_back, driving_licence, notes 
+  } = req.body;
   try {
     const [result] = await pool.query(
-      'INSERT INTO bookings (car_id, customer_name, customer_email, customer_phone, pickup_date, return_date, pickup_location, dropoff_location, total_price, delivery_charge, pickup_charge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [car_id, customer_name, customer_email, customer_phone, pickup_date, return_date, pickup_location, dropoff_location, total_price, delivery_charge, pickup_charge]
+      `INSERT INTO bookings (
+        car_id, customer_name, customer_email, customer_phone, 
+        pickup_date, return_date, pickup_location, dropoff_location, 
+        total_price, delivery_charge, pickup_charge,
+        passport_front, passport_back, driving_licence, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        car_id, customer_name, customer_email, customer_phone, 
+        pickup_date, return_date, pickup_location, dropoff_location, 
+        total_price, delivery_charge, pickup_charge,
+        passport_front, passport_back, driving_licence, notes
+      ]
     );
     res.status(201).json({ id: result.insertId, ...req.body });
   } catch (err) {
