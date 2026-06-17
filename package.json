@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "init-db": "node init-db.js",
+    "seed:cars": "node seed-cars.js",
     "migrate:car-prices": "node migrate-car-prices.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
