@@ -277,6 +277,29 @@ app.delete('/api/locations/:id', async (req, res) => {
   }
 });
 
+// Admin Login API
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, username, role FROM users WHERE username = ? AND password = ?',
+      [username, password]
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+    res.json({
+      success: true,
+      user: { id: rows[0].id, username: rows[0].username, role: rows[0].role },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Contacts API
 app.post('/api/contacts', async (req, res) => {
   const { name, email, phone, subject, message } = req.body;
