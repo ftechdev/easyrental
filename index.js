@@ -277,6 +277,68 @@ app.delete('/api/locations/:id', async (req, res) => {
   }
 });
 
+// Admin Profile API
+app.get('/api/admin/profile/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, username, role, created_at FROM users WHERE id = ?',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/admin/profile', async (req, res) => {
+  const { id, currentPassword, username, newPassword } = req.body;
+  if (!id || !currentPassword) {
+    return res.status(400).json({ error: 'User id and current password are required' });
+  }
+  if (!username && !newPassword) {
+    return res.status(400).json({ error: 'Provide a new username or new password to update' });
+  }
+  if (newPassword && newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  }
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, username, role FROM users WHERE id = ? AND password = ?',
+      [id, currentPassword]
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    if (username && username !== rows[0].username) {
+      const [existing] = await pool.query(
+        'SELECT id FROM users WHERE username = ? AND id != ?',
+        [username, id]
+      );
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'Username is already taken' });
+      }
+      await pool.query('UPDATE users SET username = ? WHERE id = ?', [username, id]);
+    }
+
+    if (newPassword) {
+      await pool.query('UPDATE users SET password = ? WHERE id = ?', [newPassword, id]);
+    }
+
+    const [updated] = await pool.query(
+      'SELECT id, username, role, created_at FROM users WHERE id = ?',
+      [id]
+    );
+    res.json({ message: 'Profile updated successfully', user: updated[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin Login API
 app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body;
